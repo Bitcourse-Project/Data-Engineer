@@ -21,19 +21,20 @@ def convert_klines_to_rows(klines, symbol):
         row = (
             dt_object,
             symbol,
-            Decimal(data[1]),
-            Decimal(data[2]),
-            Decimal(data[3]),
-            Decimal(data[4]),
-            Decimal(data[5]),
-            Decimal(data[7]),
+            float(data[1]),  # 변환
+            float(data[2]),  # 변환
+            float(data[3]),  # 변환
+            float(data[4]),  # 변환
+            float(data[5]),  # 변환
+            float(data[7]),  # 변환
             data[8],
-            Decimal(data[9]),
-            Decimal(data[10]),
+            float(data[9]),  # 변환
+            float(data[10]), # 변환
             data[11]
         )
         rows.append(row)
     return rows
+
 
 def create_spark_dataframe(rows, schema):
     df_spark = spark.createDataFrame(rows, schema=schema)
@@ -54,18 +55,32 @@ symbol = 'BTCUSDT'
 #klines = client.get_historical_klines(symbol, Client.KLINE_INTERVAL_4HOUR,"1 Jan, 2017")
 klines = client.get_historical_klines(symbol, Client.KLINE_INTERVAL_1DAY,"1 Jan, 2017")
 
+# schema = StructType([
+#     StructField("datetime", TimestampType(), True),
+#     StructField("symbol", StringType(), True),
+#     StructField("open", DecimalType(18, 2), True),
+#     StructField("high", DecimalType(18, 2), True),
+#     StructField("low", DecimalType(18, 2), True),
+#     StructField("close", DecimalType(18, 2), True),
+#     StructField("volume", DecimalType(18, 2), True),
+#     StructField("QuoteAssetVolume", DecimalType(18, 2), True),
+#     StructField("NumTrades", IntegerType(), True),
+#     StructField("TakerBuyBaseAssetVolume", DecimalType(18, 2), True),
+#     StructField("TakerBuyQuoteAssetVolume", DecimalType(18, 2), True),
+#     StructField("Ignore", StringType(), True)
+# ])
 schema = StructType([
     StructField("datetime", TimestampType(), True),
     StructField("symbol", StringType(), True),
-    StructField("open", DecimalType(18, 2), True),
-    StructField("high", DecimalType(18, 2), True),
-    StructField("low", DecimalType(18, 2), True),
-    StructField("close", DecimalType(18, 2), True),
-    StructField("volume", DecimalType(18, 2), True),
-    StructField("QuoteAssetVolume", DecimalType(18, 2), True),
+    StructField("open", DoubleType(), True),
+    StructField("high", DoubleType(), True),
+    StructField("low", DoubleType(), True),
+    StructField("close", DoubleType(), True),
+    StructField("volume", DoubleType(), True),
+    StructField("QuoteAssetVolume", DoubleType(), True),
     StructField("NumTrades", IntegerType(), True),
-    StructField("TakerBuyBaseAssetVolume", DecimalType(18, 2), True),
-    StructField("TakerBuyQuoteAssetVolume", DecimalType(18, 2), True),
+    StructField("TakerBuyBaseAssetVolume", DoubleType(), True),
+    StructField("TakerBuyQuoteAssetVolume",DoubleType(), True),
     StructField("Ignore", StringType(), True)
 ])
 

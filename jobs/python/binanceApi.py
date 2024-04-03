@@ -17,9 +17,6 @@ spark = SparkSession.builder.appName("binance")\
     .config("spark.driver.extraClassPath", "/opt/bitnami/spark/jars/postgresql-42.7.1.jar") \
     .getOrCreate()
 
-t = os.getenv("binance_api_key")
-print(t)
-
 api_key = config.api_key
 api_secret = config.api_secret
 
