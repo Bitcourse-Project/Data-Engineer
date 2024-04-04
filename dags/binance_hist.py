@@ -12,14 +12,21 @@ dag = DAG(
     },
 )
 
-
 python_job = SparkSubmitOperator(
-    task_id="kline_data_extract_hist",
+    task_id="binance_hist",
     conn_id="spark-conn",
     application="jobs/python/binanceHistory.py",
     jars="/opt/airflow/dags/jars/postgresql-42.7.1.jar",
     dag=dag
 )
 
+python_job2 = SparkSubmitOperator(
+    task_id="rsi_hist_generate",
+    conn_id="spark-conn",
+    application="jobs/python/generateRsiHistory.py",
+    jars="/opt/airflow/dags/jars/postgresql-42.7.1.jar",
+    dag=dag
+)
 
-python_job
+
+python_job >> python_job2
