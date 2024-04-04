@@ -17,84 +17,58 @@ spark = SparkSession.builder.appName("binance")\
     .config("spark.driver.extraClassPath", "/opt/bitnami/spark/jars/postgresql-42.7.1.jar") \
     .getOrCreate()
 
-api_key = config.api_key
-api_secret = config.api_secret
+def getData(api_key, api_secret, symbol):
 
-client = Client(api_key, api_secret)
+    client = Client(api_key, api_secret)
+    candles = client.get_klines(symbol=symbol, interval=Client.KLINE_INTERVAL_1DAY, limit = 2)
+    candles = candles[0]
+
+    korea_tz = pytz.timezone('Asia/Seoul')
+    dt_object = datetime.datetime.fromtimestamp(candles[0]/1000, tz=pytz.utc).astimezone(korea_tz)
+
+    data = {
+        "datetime": dt_object,
+        "symbol" : 'BTCUSDT',
+        "open": float(candles[1]),
+        "high": float(candles[2]),
+        "low": float(candles[3]),
+        "close": float(candles[4]),
+        "volume": float(candles[5]),
+        "quoteAssetVolume": float(candles[7]),
+        "NumTrades": int(candles[8]),
+        "TakerBuyBaseAssetVolume": float(candles[9]),
+        "TakerBuyQuoteAssetVolume": float(candles[10])
+    }
+    schema = StructType([
+        StructField("datetime", TimestampType(), True),
+        StructField("symbol", StringType(), True),
+        StructField("open", DoubleType(), True),
+        StructField("high", DoubleType(), True),
+        StructField("low", DoubleType(), True),
+        StructField("close", DoubleType(), True),
+        StructField("volume", DoubleType(), True),
+        StructField("QuoteAssetVolume", DoubleType(), True),
+        StructField("NumTrades", IntegerType(), True),
+        StructField("TakerBuyBaseAssetVolume", DoubleType(), True),
+        StructField("TakerBuyQuoteAssetVolume",DoubleType(), True),
+    ])
+
+
+    row = Row(**data)
+    df = spark.createDataFrame([row],schema)
+    df = df.withColumn("datetime", from_utc_timestamp(df["datetime"], "Asia/Seoul"))
+    return df
 
 symbol = 'BTCUSDT'
-candles = client.get_klines(symbol=symbol, interval=Client.KLINE_INTERVAL_1HOUR, limit = 1)
-candles = candles[0]
+df = getData(config.api_key, config.api_secret, symbol)
 
-
-korea_tz = pytz.timezone('Asia/Seoul')
-dt_object = datetime.datetime.fromtimestamp(candles[0]/1000, tz=pytz.utc).astimezone(korea_tz)
-print(dt_object)
-
-data = {
-    "datetime": dt_object,
-    "symbol" : 'BTCUSDT',
-    "open": Decimal(candles[1]),
-    "high": Decimal(candles[2]),
-    "low": Decimal(candles[3]),
-    "close": Decimal(candles[4]),
-    "volume": Decimal(candles[5]),
-    "quoteAssetVolume": Decimal(candles[7]),
-    "NumTrades": int(candles[8]),
-    "TakerBuyBaseAssetVolume": Decimal(candles[9]),
-    "TakerBuyQuoteAssetVolume": Decimal(candles[10])
-}
-
-
-schema = StructType([
-    StructField("datetime", TimestampType(), True),
-    StructField("symbol", StringType(), True),
-    StructField("open", DecimalType(18, 2), True),
-    StructField("high", DecimalType(18, 2), True),
-    StructField("low", DecimalType(18, 2), True),
-    StructField("close", DecimalType(18, 2), True),
-    StructField("volume", DecimalType(18, 2), True),
-    StructField("quoteassetvolume", DecimalType(18, 2), True),
-    StructField("numtrades", IntegerType(), True),
-    StructField("takerbuybaseassetvolume", DecimalType(18, 2), True),
-    StructField("takerbuyquoteassetvolume", DecimalType(18, 2), True)
-])
-
-row = Row(**data)
-
-
-df = spark.createDataFrame([row],schema)
-df = df.withColumn("datetime", from_utc_timestamp(df["datetime"], "Asia/Seoul"))
-
-# localhost
-# port
-port = "5432" 
-# username
-user = "postgres"
-# password
-passwd = "postgres"
-# database
 db = "coin"
-url = "jdbc:postgresql://postgres-coin:5432/coin"
-
-df.printSchema()
-df.show()
 
 df.write.format("jdbc") \
-    .option("url", "jdbc:postgresql://postgres-coin:5432/coin") \
+    .option("url","jdbc:postgresql://{0}:{1}/{2}".format(config.psql_ip, config.psql_port, db ) )\
     .option("driver", "org.postgresql.Driver") \
-    .option("user", user) \
-    .option("password", passwd) \
-    .option("dbtable", "kline") \
+    .option("user", config.psql_user) \
+    .option("password", config.psql_passwd) \
+    .option("dbtable", "kline_1d") \
     .mode("append") \
     .save()
-
-# jdbc_properties = {
-#     "user": user,
-#     "password": passwd,
-#     "driver": "org.postgresql.Driver"
-# }
-
-# # PostgreSQL 데이터 읽기
-# df = spark.read.jdbc(url=url, table="kline", properties=jdbc_properties)
-# df.show()
