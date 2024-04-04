@@ -7,7 +7,7 @@ from decimal import Decimal
 import pyspark.sql.types as T
 from pyspark.sql import functions as F
 from pyspark.sql.window import Window
-
+import config
 
 def calculate_ewma(values, com):
     alpha = 1 / (com + 1)
@@ -15,8 +15,6 @@ def calculate_ewma(values, com):
     for value in values[1:]:
         ewma = (1 - alpha) * ewma + alpha * value
     return ewma
-
-ewma_udf = F.udf(calculate_ewma, T.DoubleType())
 
 def RSI(df, period=14, com=13):
 
@@ -37,54 +35,47 @@ def RSI(df, period=14, com=13):
 
     return df
 
+ewma_udf = F.udf(calculate_ewma, T.DoubleType())
+
 
 spark = SparkSession.builder.appName("binance")\
     .config("spark.driver.extraClassPath", "/opt/bitnami/spark/jars/postgresql-42.7.1.jar") \
     .getOrCreate()
 
 
-schema = StructType([
-    StructField("datetime", TimestampType(), True),
-    StructField("symbol", StringType(), True),
-    StructField("open", DoubleType(), True),
-    StructField("high", DoubleType(), True),
-    StructField("low", DoubleType(), True),
-    StructField("close", DoubleType(), True),
-    StructField("volume", DoubleType(), True),
-    StructField("QuoteAssetVolume", DoubleType(), True),
-    StructField("NumTrades", IntegerType(), True),
-    StructField("TakerBuyBaseAssetVolume", DoubleType(), True),
-    StructField("TakerBuyQuoteAssetVolume",DoubleType(), True),
-    StructField("Ignore", StringType(), True)
+schema = T.StructType([
+    T.StructField("datetime", T.TimestampType(), True),
+    T.StructField("symbol", T.StringType(), True),
+    T.StructField("open", T.DoubleType(), True),
+    T.StructField("high", T.DoubleType(), True),
+    T.StructField("low", T.DoubleType(), True),
+    T.StructField("close", T.DoubleType(), True)
 ])
 
 
-ip = "postgres-coin"
-port = "5432"
-db = "coin"
-user = "postgres"
-passwd = "postgres"
-sql = "SELECT * FROM kline_1d ORDER BY datetime DESC LIMIT 200"
 
+db = "coin"
+sql = "SELECT * FROM kline_1d ORDER BY datetime DESC LIMIT 200"
 kline_1d = spark.read.format("jdbc")\
-                    .option("url","jdbc:postgresql://{0}:{1}/{2}".format( ip, port, db ) )\
+                    .option("url","jdbc:postgresql://{0}:{1}/{2}".format( config.psql_ip, config.psql_port, db ) )\
                     .option("driver", "org.postgresql.Driver")\
-                    .option("user", user)\
+                    .option("user", config.psql_user)\
                     .option("query", sql)\
-                    .option("password", passwd)\
+                    .option("password", config.psql_passwd)\
+                    .option("schema", schema)\
                     .load()
 
 
 rsi_df = RSI(kline_1d)
-rsi_df = rsi_df.orderBy("datetime", ascending =False).limit(30)
+rsi_df = rsi_df.orderBy("datetime", ascending =False).limit(1)
 res_df = rsi_df.select("datetime","symbol","open","high","low","close","up_ewma","down_ewma","rsi")
-res_df.show()
+#res_df.show()
 
 res_df.write.format("jdbc") \
-    .option("url", "jdbc:postgresql://postgres-coin:5432/coin") \
+    .option("url","jdbc:postgresql://{0}:{1}/{2}".format(config.psql_ip, config.psql_port, db ) )\
     .option("driver", "org.postgresql.Driver") \
-    .option("user", user) \
-    .option("password", passwd) \
+    .option("user", config.psql_user) \
+    .option("password", config.psql_passwd) \
     .option("dbtable", "kline_1d_rsi") \
-    .mode("overwrite") \
+    .mode("append") \
     .save()
