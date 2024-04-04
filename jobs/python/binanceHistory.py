@@ -35,7 +35,6 @@ def convert_klines_to_rows(klines, symbol):
         rows.append(row)
     return rows
 
-
 def create_spark_dataframe(rows, schema):
     df_spark = spark.createDataFrame(rows, schema=schema)
     df_spark = df_spark.withColumn("datetime", from_utc_timestamp(df_spark["datetime"], "Asia/Seoul"))
@@ -46,29 +45,15 @@ spark = SparkSession.builder.appName("binance")\
     .config("spark.driver.extraClassPath", "/opt/bitnami/spark/jars/postgresql-42.7.1.jar") \
     .getOrCreate()
 
-api_key = config.api_key
-api_secret = config.api_secret
-client = Client(api_key, api_secret)
+client = Client(config.api_key, config.api_secret)
 symbol = 'BTCUSDT'
+startday = "1 Jan, 2017"
+endday = "3 Apr, 2024"
 
-#klines = client.get_historical_klines(symbol, Client.KLINE_INTERVAL_1HOUR,"1 Jan, 2017")
-#klines = client.get_historical_klines(symbol, Client.KLINE_INTERVAL_4HOUR,"1 Jan, 2017")
-klines = client.get_historical_klines(symbol, Client.KLINE_INTERVAL_1DAY,"1 Jan, 2017")
+#klines = client.get_historical_klines(symbol, Client.KLINE_INTERVAL_1HOUR,startday,endday)
+#klines = client.get_historical_klines(symbol, Client.KLINE_INTERVAL_4HOUR,startday,endday)
+klines = client.get_historical_klines(symbol, Client.KLINE_INTERVAL_1DAY, startday,endday)
 
-# schema = StructType([
-#     StructField("datetime", TimestampType(), True),
-#     StructField("symbol", StringType(), True),
-#     StructField("open", DecimalType(18, 2), True),
-#     StructField("high", DecimalType(18, 2), True),
-#     StructField("low", DecimalType(18, 2), True),
-#     StructField("close", DecimalType(18, 2), True),
-#     StructField("volume", DecimalType(18, 2), True),
-#     StructField("QuoteAssetVolume", DecimalType(18, 2), True),
-#     StructField("NumTrades", IntegerType(), True),
-#     StructField("TakerBuyBaseAssetVolume", DecimalType(18, 2), True),
-#     StructField("TakerBuyQuoteAssetVolume", DecimalType(18, 2), True),
-#     StructField("Ignore", StringType(), True)
-# ])
 schema = StructType([
     StructField("datetime", TimestampType(), True),
     StructField("symbol", StringType(), True),
@@ -84,28 +69,16 @@ schema = StructType([
     StructField("Ignore", StringType(), True)
 ])
 
-
 rows = convert_klines_to_rows(klines,symbol)
-df_spark = create_spark_dataframe(rows, schema)
+df = create_spark_dataframe(rows, schema)
 
-
-port = "5432" 
-user = "postgres"
-passwd = "postgres"
 db = "coin"
-url = "jdbc:postgresql://postgres-coin:5432/coin"
-
-df_spark.write.format("jdbc") \
-    .option("url", "jdbc:postgresql://postgres-coin:5432/coin") \
+df = df.orderBy("datetime", ascending=True)
+df.write.format("jdbc") \
+    .option("url","jdbc:postgresql://{0}:{1}/{2}".format(config.psql_ip, config.psql_port, db ) )\
     .option("driver", "org.postgresql.Driver") \
-    .option("user", user) \
-    .option("password", passwd) \
+    .option("user", config.psql_user) \
+    .option("password", config.psql_passwd) \
     .option("dbtable", "kline_1d") \
     .mode("overwrite") \
     .save()
-
-jdbc_properties = {
-    "user": user,
-    "password": passwd,
-    "driver": "org.postgresql.Driver"
-}
